@@ -256,7 +256,7 @@ class QModel:
         new_weights = []
 
         for i in range(len(weights_model)):
-            new_weights.append(self.tau * weights_model[i] * (1. - self.tau) * weights_target[i])
+            new_weights.append(self.tau * weights_model[i] + (1. - self.tau) * weights_target[i])
 
         self.target_model.set_weights(new_weights)
 
