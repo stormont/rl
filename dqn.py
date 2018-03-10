@@ -258,7 +258,6 @@ class QModel:
             self.target_model.set_weights(self.model.get_weights())
             return
 
-        # TODO figure out how to get the slow-shifting tau weight from Lillicrap 2016 to work correctly
         weights_model = self.model.get_weights()
         weights_target = self.target_model.get_weights()
         new_weights = []
