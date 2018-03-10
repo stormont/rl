@@ -425,7 +425,7 @@ def run(env, num_episodes, num_time_steps, replay_batch_size, scores_filename=No
         scores[e] = time_steps
 
     time_end = time.time()
-    print('Average last 1000 episodes:', np.mean(scores[1000:]))
+    print('Average score for last 10% of episodes:', np.mean(scores[int(np.floor(num_episodes * 0.1)):]))
     print('Time taken:', time_end - time_start, 'seconds')
 
     if scores_filename is not None:
@@ -434,5 +434,4 @@ def run(env, num_episodes, num_time_steps, replay_batch_size, scores_filename=No
 
 if __name__ == "__main__":
     run(WrappedCartPoleEnvironment(),
-        num_episodes=10000, num_time_steps=500, replay_batch_size=32,
-        scores_filename='dqn.csv')
+        num_episodes=10000, num_time_steps=500, replay_batch_size=32)
