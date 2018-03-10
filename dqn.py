@@ -250,17 +250,15 @@ class QModel:
             self.target_model.set_weights(self.model.get_weights())
             return
 
-        # TODO figure out how to get the slow-shifting tau weight from Silver 2016 to work correctly
-        # weights_model = self.model.get_weights()
-        # weights_target = self.target_model.get_weights()
-        #
-        # for i in range(len(weights_model)):
-        #     weights_model[i] *= self.tau
-        #
-        # for i in range(len(weights_target)):
-        #     weights_target[i] *= (1. - self.tau)
-        #
-        # self.target_model.set_weights(weights_model + weights_target)
+        # TODO figure out how to get the slow-shifting tau weight from Lillicrap 2016 to work correctly
+        weights_model = self.model.get_weights()
+        weights_target = self.target_model.get_weights()
+        new_weights = []
+
+        for i in range(len(weights_model)):
+            new_weights.append(self.tau * weights_model[i] * (1. - self.tau) * weights_target[i])
+
+        self.target_model.set_weights(new_weights)
 
 
 class QAgent:
@@ -408,10 +406,10 @@ def run(env, num_episodes, num_time_steps, replay_batch_size, scores_filename=No
     model.build()
     target_model = Model(state_size=env.state_size, action_size=env.action_size, learning_rate=0.001)
     target_model.build()
+
     # qmodel = QModel(model=model, experience_replay=experience_replay)
-    # qmodel = FixedTargetQModel(model=model, target_model=target_model, tau=0.001, experience_replay=experience_replay)
-    qmodel = QModel(model=model, target_model=target_model, tau=0.001,
-                    experience_replay=experience_replay, use_double_q=True)
+    # qmodel = FixedTargetQModel(model=model, target_model=target_model, experience_replay=experience_replay)
+    qmodel = QModel(model=model, target_model=target_model, experience_replay=experience_replay, use_double_q=True)
 
     agent = QAgent(state_size=env.state_size, action_size=env.action_size, model=qmodel, exploration=exploration,
                    discount_rate=0.95)
