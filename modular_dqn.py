@@ -308,8 +308,7 @@ def run(env, num_episodes, num_time_steps, replay_batch_size, scores_filename=No
 
     for e in range(num_episodes):
         time_steps = agent.train(env=env, episode_length=num_time_steps)
-        print("episode: {}/{}, score: {}, e: {:.2}"
-              .format(e + 1, num_episodes, time_steps, agent.exploration.epsilon))
+        print('episode: {}/{}, score: {}, e: {:.2}'.format(e + 1, num_episodes, time_steps, agent.exploration.epsilon))
         scores[e] = time_steps
 
     time_end = time.time()
