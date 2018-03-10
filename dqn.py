@@ -231,6 +231,14 @@ class QModel:
         target_values = self.target_model.predict(state)[0]
         return target_values[action]
 
+    def supports_gradual_target_updates(self):
+        """
+        Gets whether the model supports frequent, gradual updates to target values.
+
+        :return: Whether gradual updates are supported.
+        """
+        return self.tau is not None
+
     def update_target_values(self):
         """
         Updates the target values for fixed target DQN or Double-Q learning. (This is a no-op when using vanilla DQN.)
@@ -245,7 +253,7 @@ class QModel:
         # Fixed-target DQN and/or Double-DQN
         #
 
-        if self.tau is None:
+        if not self.supports_gradual_target_updates():
             # Just do a strict copy, as per the Mnih 2015 paper
             self.target_model.set_weights(self.model.get_weights())
             return
@@ -318,13 +326,16 @@ class QAgent:
 
         for state, action, reward, (next_state, done) in minibatch:
             if done:
-                target = reward
+                td_error = reward
             else:
-                target = reward + self.gamma * self.model.get_target_value(next_state)
+                td_error = reward + self.gamma * self.model.get_target_value(next_state)
 
             target_prediction = self.model.predict(state)
-            target_prediction[0][action] = target
+            target_prediction[0][action] = td_error
             self.model.fit(state, target_prediction)
+
+            if self.model.supports_gradual_target_updates():
+                self.model.update_target_values()
 
         self.exploration.step()
 
@@ -409,7 +420,8 @@ def run(env, num_episodes, num_time_steps, replay_batch_size, scores_filename=No
 
     # qmodel = QModel(model=model, experience_replay=experience_replay)
     # qmodel = FixedTargetQModel(model=model, target_model=target_model, experience_replay=experience_replay)
-    qmodel = QModel(model=model, target_model=target_model, experience_replay=experience_replay, use_double_q=True)
+    qmodel = QModel(model=model, target_model=target_model, experience_replay=experience_replay,
+                    tau=0.1, use_double_q=True)
 
     agent = QAgent(state_size=env.state_size, action_size=env.action_size, model=qmodel, exploration=exploration,
                    discount_rate=0.95)
