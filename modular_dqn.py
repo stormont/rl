@@ -86,14 +86,26 @@ class EpsilonGreedy:
 
 
 class Model:
+    """
+    A generic dense neural network model.
+    """
     def __init__(self, state_size, action_size, learning_rate):
+        """
+        Creates the model
+
+        :param state_size: The size of the state space.
+        :param action_size: The size of the action space.
+        :param learning_rate: The learning rate to apply during training.
+        """
         self.state_size = state_size
         self.action_size = action_size
         self.learning_rate = learning_rate
         self.model = None
 
     def build(self):
-        # Neural Net for Deep-Q learning Model
+        """
+        Builds the model.
+        """
         model = Sequential()
         model.add(Dense(24, input_dim=self.state_size, activation='relu'))
         model.add(Dense(24, activation='relu'))
@@ -102,26 +114,72 @@ class Model:
         self.model = model
 
     def fit(self, state, target_prediction):
-        return self.model.fit(state, target_prediction, epochs=1, verbose=0)
+        """
+        Fits a state and target prediction against the model (with one epoch).
+
+        :param state: The state to fit.
+        :param target_prediction: The target prediction.
+        """
+        self.model.fit(state, target_prediction, epochs=1, verbose=0)
 
     def predict(self, state):
+        """
+        Get a prediction for the state from the model.
+
+        :param state: The state to get a prediction for.
+        :return: The predicted outcome.
+        """
         return self.model.predict(state)
 
     def get_weights(self):
+        """
+        Gets the current weights for the model.
+
+        :return: The current weights.
+        """
         return self.model.get_weights()
 
     def set_weights(self, weights):
+        """
+        Sets the current weights for the model.
+
+        :param weights: The weights to set.
+        """
         self.model.set_weights(weights)
 
-    def load(self, name):
-        self.model.load_weights(name)
+    def load(self, filename):
+        """
+        Loads weights from a file into the model.
 
-    def save(self, name):
-        self.model.save_weights(name)
+        :param filename: The name of the file that contains the weight data.
+        """
+        self.model.load_weights(filename)
+
+    def save(self, filename):
+        """
+        Saves model weights to a file.
+
+        :param filename: The name of the file to save the weight data to.
+        """
+        self.model.save_weights(filename)
 
 
 class QModel:
+    """
+    A model for performing Q-learning.
+    """
+
     def __init__(self, model, target_model=None, tau=None, experience_replay=None, use_double_q=False):
+        """
+        Creates the Q-learning model.
+
+        :param model: The model for current action and training.
+        :param target_model: (optional) The target model for training against.
+        :param tau: (optional) The weight to apply for updating target weights to the current model. When this is not
+                    supplied, a strict copy will be used, as per Mnih 2015.
+        :param experience_replay: (optional) The behavior for performing experience replay.
+        :param use_double_q: Whether to use Double-Q learning.
+        """
         self.model = model
         self.target_model = target_model
         self.tau = tau
@@ -129,18 +187,29 @@ class QModel:
         self.use_double_q = use_double_q
 
     def fit(self, state, target_prediction):
+        """
+        Fits a state and target prediction against the model.
+
+        :param state: The state to fit.
+        :param target_prediction: The target prediction.
+        """
         if self.use_double_q and np.random.rand() < 0.5:
             swap = self.model
             self.model = self.target_model
             self.target_model = swap
 
-        result = self.model.fit(state, target_prediction)
-        return result
+        self.model.fit(state, target_prediction)
 
     def predict(self, state):
         return self.model.predict(state)
 
     def get_target_value(self, state):
+        """
+        Gets the TD-target for the given state.
+
+        :param state: The state to get the TD-target for.
+        :return: The TD-target of the state.
+        """
         #
         # Vanilla DQN
         #
@@ -163,6 +232,9 @@ class QModel:
         return target_values[action]
 
     def update_target_values(self):
+        """
+        Updates the target values for fixed target DQN or Double-Q learning. (This is a no-op when using vanilla DQN.)
+        """
         #
         # Vanilla DQN - do nothing
         #
@@ -172,6 +244,11 @@ class QModel:
         #
         # Fixed-target DQN and/or Double-DQN
         #
+
+        if self.tau is None:
+            # Just do a strict copy, as per the Mnih 2015 paper
+            self.target_model.set_weights(self.model.get_weights())
+            return
 
         # TODO figure out how to get the slow-shifting tau weight from Silver 2016 to work correctly
         # weights_model = self.model.get_weights()
@@ -184,12 +261,23 @@ class QModel:
         #     weights_target[i] *= (1. - self.tau)
         #
         # self.target_model.set_weights(weights_model + weights_target)
-        self.target_model.set_weights(self.model.get_weights())
 
 
 class QAgent:
-    def __init__(self,
-                 state_size, action_size, model, exploration, discount_rate):
+    """
+    An agent for exploring and taking action in an environment with a discrete action space.
+    """
+
+    def __init__(self, state_size, action_size, model, exploration, discount_rate):
+        """
+        Creates the agent.
+
+        :param state_size: The size of the state space.
+        :param action_size: The size of the discrete action space.
+        :param model: The model to train and predict upon.
+        :param exploration: The behavior for exploration.
+        :param discount_rate: The discount rate for future rewards.
+        """
         self.state_size = state_size
         self.action_size = action_size
         self.model = model
@@ -197,15 +285,34 @@ class QAgent:
         self.gamma = discount_rate
 
     def act(self, state, be_greedy=False):
+        """
+        Select an action to perform an action upon the environment.
+
+        :param state: The state to act upon.
+        :param be_greedy: Whether to act greedily.
+        :return: The action to be performed on the environment.
+        """
         if not be_greedy and self.exploration.should_explore():
             return random.randrange(self.action_size)
 
         return np.argmax(self.model.predict(state)[0])
 
-    def remember(self, state, action, reward, next_state, done):
+    def remember(self, state, action, reward, next_state, done=None):
+        """
+        Remember a (S, A, R, S_next) experience tuple.
+
+        :param state: The current state.
+        :param action: The action taken.
+        :param reward: The reward granted.
+        :param next_state: The next state transitioned to.
+        :param done: (option) Whether the episodic task has completed.
+        """
         self.model.experience_replay.add(state, action, reward, (next_state, done))
 
     def replay(self):
+        """
+        Performs a step of experience replay for additional offline training.
+        """
         if not self.model.experience_replay.can_sample():
             return
 
@@ -224,10 +331,17 @@ class QAgent:
         self.exploration.step()
 
     def train(self, env, episode_length=1):
-        state = env.reset()
-        time_steps = 0
+        """
+        Performs a training step for the model against the given environment.
 
-        for time_steps in range(episode_length):
+        :param env: The environment to train against.
+        :param episode_length: The max length of the episode to train against.
+        :return: The number of steps taken in the episode.
+        """
+        state = env.reset()
+        steps_taken = 0
+
+        for steps_taken in range(episode_length):
             action = self.act(state)
             next_state, reward, done = env.step(action)
             self.model.experience_replay.add(state, action, reward, (next_state, done))
@@ -240,22 +354,21 @@ class QAgent:
         if self.model.experience_replay.can_sample():
             self.replay()
 
-        return time_steps
+        return steps_taken
 
 
-class CartPoleEnvironmentWrapper:
+class WrappedCartPoleEnvironment:
     """
-    A helper wrapper around the environment, to simplify agent code related to the reward.
+    A helper wrapper around the CartPole environment, to simplify agent code related to the reward.
     """
 
-    def __init__(self, env):
+    def __init__(self):
         """
         Creates the wrapped environment.
-        :param env: The environment to wrap.
         """
-        self.env = env
-        self.state_size = env.observation_space.shape[0]
-        self.action_size = env.action_space.n
+        self.env = gym.make('CartPole-v1')
+        self.state_size = self.env.observation_space.shape[0]
+        self.action_size = self.env.action_space.n
 
     def reset(self):
         """
@@ -320,6 +433,6 @@ def run(env, num_episodes, num_time_steps, replay_batch_size, scores_filename=No
 
 
 if __name__ == "__main__":
-    run(CartPoleEnvironmentWrapper(gym.make('CartPole-v1')),
+    run(WrappedCartPoleEnvironment(),
         num_episodes=10000, num_time_steps=500, replay_batch_size=32,
-        scores_filename='modular_dqn.csv')
+        scores_filename='dqn.csv')
