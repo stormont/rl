@@ -303,19 +303,32 @@ class QAgent:
 
         return np.argmax(self.model.predict(state)[0])
 
-    def remember(self, state, action, reward, next_state, done=None):
+    def train(self, env, episode_length=1):
         """
-        Remember a (S, A, R, S_next) experience tuple.
+        Performs a training step for the model against the given environment.
 
-        :param state: The current state.
-        :param action: The action taken.
-        :param reward: The reward granted.
-        :param next_state: The next state transitioned to.
-        :param done: (option) Whether the episodic task has completed.
+        :param env: The environment to train against.
+        :param episode_length: The max length of the episode to train against.
+        :return: The number of steps taken in the episode.
         """
-        self.model.experience_replay.add(state, action, reward, (next_state, done))
+        state = env.reset()
+        steps_taken = 0
 
-    def replay(self):
+        for steps_taken in range(episode_length):
+            action = self.act(state)
+            next_state, reward, done = env.step(action)
+            self.model.experience_replay.add(state, action, reward, (next_state, done))
+            state = next_state
+
+            if done:
+                break
+
+        if self.model.experience_replay.can_sample():
+            self._replay()
+
+        return steps_taken
+
+    def _replay(self):
         """
         Performs a step of experience replay for additional offline training.
         """
@@ -338,31 +351,6 @@ class QAgent:
                 self.model.update_target_values()
 
         self.exploration.step()
-
-    def train(self, env, episode_length=1):
-        """
-        Performs a training step for the model against the given environment.
-
-        :param env: The environment to train against.
-        :param episode_length: The max length of the episode to train against.
-        :return: The number of steps taken in the episode.
-        """
-        state = env.reset()
-        steps_taken = 0
-
-        for steps_taken in range(episode_length):
-            action = self.act(state)
-            next_state, reward, done = env.step(action)
-            self.model.experience_replay.add(state, action, reward, (next_state, done))
-            state = next_state
-
-            if done:
-                break
-
-        if self.model.experience_replay.can_sample():
-            self.replay()
-
-        return steps_taken
 
 
 class WrappedCartPoleEnvironment:
@@ -429,9 +417,8 @@ def run(env, num_episodes, num_time_steps, replay_batch_size, scores_filename=No
     time_start = time.time()
 
     for e in range(num_episodes):
-        time_steps = agent.train(env=env, episode_length=num_time_steps)
-        print('episode: {}/{}, score: {}, e: {:.2}'.format(e + 1, num_episodes, time_steps, agent.exploration.epsilon))
-        scores[e] = time_steps
+        scores[e] = agent.train(env=env, episode_length=num_time_steps)
+        print('episode: {}/{}, score: {}, e: {:.2}'.format(e + 1, num_episodes, scores[e], agent.exploration.epsilon))
 
     time_end = time.time()
     print('Average score for last 10% of episodes:', np.mean(scores[int(np.floor(num_episodes * 0.1)):]))
