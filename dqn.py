@@ -357,7 +357,6 @@ class QAgent:
             state = next_state
 
             if done:
-                self.model.update_target_values()
                 break
 
         if self.model.experience_replay.can_sample():
