@@ -1,3 +1,4 @@
+
 from collections import deque
 from keras.models import Sequential
 from keras.layers import Dense
@@ -5,13 +6,22 @@ from keras.optimizers import Adam
 import gym
 import numpy as np
 import random
+import third_party.takoika.PrioritizedExperienceReplay.proportional as proportional
 import time
 
 
 class Experience:
     """
-    A behavior for defining experience replay storage and sampling.
+    A behavior for storing experience replay storage and sampling.
     """
+
+    @staticmethod
+    def supports_prioritization():
+        """
+        Whether the class supports prioritized experience replay.
+        :return: This class never supports prioritized experience replay.
+        """
+        return False
 
     def __init__(self, max_size, batch_size, replay_start_size):
         """
@@ -33,7 +43,9 @@ class Experience:
         :param reward: The reward provided for the (state, action) pair.
         :param next_state: The next state transitioned to.
         """
-        self.memory.append((state, action, reward, next_state))
+        value = (state, action, reward, next_state)
+
+        self.memory.append(value)
 
     def can_sample(self):
         """
@@ -51,6 +63,75 @@ class Experience:
             return []
 
         return random.sample(self.memory, self.batch_size)
+
+
+class PriorityExperience:
+    """
+    A behavior for storing prioritized experience replay storage and sampling.
+    """
+
+    @staticmethod
+    def supports_prioritization():
+        """
+        Whether the class supports prioritized experience replay.
+        :return: This class always supports prioritized experience replay.
+        """
+        return True
+
+    def __init__(self, max_size, batch_size, replay_start_size, initial_td_error, epsilon, alpha, beta):
+        """
+        Creates the behavior.
+        :param max_size: The maximum storage size of the experience replay.
+        :param batch_size: The number of experiences to sample per replay.
+        :param replay_start_size: The required size of stored experience before experience can be replayed.
+        :param initial_td_error: The initial TD-error to assign to prioritized samples.
+        :param epsilon: The epsilon non-zero error to add to prioritized samples.
+        :param alpha: The exponent by which to weight the prioritization amount.
+        :param beta: The exponent by which to weight importance sampling.
+        """
+        self.memory = proportional.Experience(memory_size=max_size, alpha=alpha, epsilon=epsilon)
+        self.batch_size = batch_size
+        self.replay_start_size = replay_start_size
+        self.initial_td_error = initial_td_error
+        self.epsilon = epsilon
+        self.beta = beta
+
+    def add(self, state, action, reward, next_state):
+        """
+        Adds an experience to the replay memory. Include all necessary environment state in the 'state'
+        or 'next_state' variable (e.g., whether the episode has completed, for episodic environments).
+        :param state: The current state.
+        :param action: The action taken.
+        :param reward: The reward provided for the (state, action) pair.
+        :param next_state: The next state transitioned to.
+        """
+        value = (state, action, reward, next_state)
+        self.memory.add(value, self.initial_td_error)
+
+    def can_sample(self):
+        """
+        Checks whether experience replay is allowed to sample.
+        :return: Whether experience replay is allowed to sample batches.
+        """
+        return len(self.memory) >= self.replay_start_size
+
+    def sample(self):
+        """
+        Samples randomly from the stored experience.
+        :return: A batch of random samples from the stored experience, or an empty array if not allowed.
+        """
+        if not self.can_sample():
+            return []
+
+        return self.memory.select(self.beta, batch_size=self.batch_size)
+
+    def update_priority(self, sample_index, new_priority):
+        """
+        Updates the priority of the sample.
+        :param sample_index: The index of the sample to update.
+        :param new_priority: The new priority of the sample.
+        """
+        self.memory.priority_update(indices=[sample_index], priorities=[new_priority])
 
 
 class EpsilonGreedy:
@@ -116,7 +197,6 @@ class Model:
     def fit(self, state, target_prediction):
         """
         Fits a state and target prediction against the model (with one epoch).
-
         :param state: The state to fit.
         :param target_prediction: The target prediction.
         """
@@ -125,7 +205,6 @@ class Model:
     def predict(self, state):
         """
         Get a prediction for the state from the model.
-
         :param state: The state to get a prediction for.
         :return: The predicted outcome.
         """
@@ -134,7 +213,6 @@ class Model:
     def get_weights(self):
         """
         Gets the current weights for the model.
-
         :return: The current weights.
         """
         return self.model.get_weights()
@@ -142,7 +220,6 @@ class Model:
     def set_weights(self, weights):
         """
         Sets the current weights for the model.
-
         :param weights: The weights to set.
         """
         self.model.set_weights(weights)
@@ -150,7 +227,6 @@ class Model:
     def load(self, filename):
         """
         Loads weights from a file into the model.
-
         :param filename: The name of the file that contains the weight data.
         """
         self.model.load_weights(filename)
@@ -158,7 +234,6 @@ class Model:
     def save(self, filename):
         """
         Saves model weights to a file.
-
         :param filename: The name of the file to save the weight data to.
         """
         self.model.save_weights(filename)
@@ -172,7 +247,6 @@ class QModel:
     def __init__(self, model, target_model=None, tau=None, experience_replay=None, use_double_q=False):
         """
         Creates the Q-learning model.
-
         :param model: The model for current action and training.
         :param target_model: (optional) The target model for training against.
         :param tau: (optional) The weight to apply for updating target weights to the current model. When this is not
@@ -189,7 +263,6 @@ class QModel:
     def fit(self, state, target_prediction):
         """
         Fits a state and target prediction against the model.
-
         :param state: The state to fit.
         :param target_prediction: The target prediction.
         """
@@ -206,7 +279,6 @@ class QModel:
     def get_target_value(self, state):
         """
         Gets the TD-target for the given state.
-
         :param state: The state to get the TD-target for.
         :return: The TD-target of the state.
         """
@@ -234,7 +306,6 @@ class QModel:
     def supports_soft_target_updates(self):
         """
         Gets whether the model supports frequent, "soft" gradual updates to target values.
-
         :return: Whether soft target updates are supported.
         """
         return self.tau is not None
@@ -277,7 +348,6 @@ class QAgent:
     def __init__(self, state_size, action_size, model, exploration, discount_rate):
         """
         Creates the agent.
-
         :param state_size: The size of the state space.
         :param action_size: The size of the discrete action space.
         :param model: The model to train and predict upon.
@@ -293,7 +363,6 @@ class QAgent:
     def act(self, state, be_greedy=False):
         """
         Select an action to perform an action upon the environment.
-
         :param state: The state to act upon.
         :param be_greedy: Whether to act greedily.
         :return: The action to be performed on the environment.
@@ -306,7 +375,6 @@ class QAgent:
     def train(self, env, episode_length=1):
         """
         Performs a training step for the model against the given environment.
-
         :param env: The environment to train against.
         :param episode_length: The max length of the episode to train against.
         :return: The total reward for the training episode.
@@ -338,12 +406,23 @@ class QAgent:
 
         minibatch = self.model.experience_replay.sample()
 
-        for state, action, reward, (next_state, done) in minibatch:
+        for sample in minibatch:
+            if self.model.experience_replay.supports_prioritization():
+                (state, action, reward, (next_state, done)), importance, index = sample
+            else:
+                state, action, reward, (next_state, done) = sample
+                importance = 1
+                index = None  # Placeholder to prevent unnecessary code analysis warning
+
             if done:
                 td_error = reward
             else:
                 td_error = reward + self.gamma * self.model.get_target_value(next_state)
 
+            if self.model.experience_replay.supports_prioritization():
+                self.model.experience_replay.update_priority(index, td_error)
+
+            td_error = importance * td_error
             target_prediction = self.model.predict(state)
             target_prediction[0][action] = td_error
             self.model.fit(state, target_prediction)
