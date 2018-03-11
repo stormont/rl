@@ -309,16 +309,17 @@ class QAgent:
 
         :param env: The environment to train against.
         :param episode_length: The max length of the episode to train against.
-        :return: The number of steps taken in the episode.
+        :return: The total reward for the training episode.
         """
         state = env.reset()
-        steps_taken = 0
+        total_reward = 0
 
         for steps_taken in range(episode_length):
             action = self.act(state)
             next_state, reward, done = env.step(action)
             self.model.experience_replay.add(state, action, reward, (next_state, done))
             state = next_state
+            total_reward += reward
 
             if done:
                 break
@@ -326,7 +327,7 @@ class QAgent:
         if self.model.experience_replay.can_sample():
             self._replay()
 
-        return steps_taken
+        return total_reward
 
     def _replay(self):
         """
