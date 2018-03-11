@@ -44,7 +44,7 @@ class Experience(object):
         priority : float
             sample's priority
         """
-        self.tree.add(data, priority**self.alpha)
+        self.tree.add(data, abs(priority)**self.alpha)
 
     def select(self, beta, batch_size=1):
         """ The method return samples randomly.
@@ -98,7 +98,7 @@ class Experience(object):
             list of updated priorities
         """
         for i, p in zip(indices, priorities):
-            self.tree.val_update(i, p**self.alpha)
+            self.tree.val_update(i, abs(p)**self.alpha)
     
     def set_alpha(self, alpha):
         """ Set the exponent alpha.
