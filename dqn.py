@@ -231,11 +231,11 @@ class QModel:
         target_values = self.target_model.predict(state)[0]
         return target_values[action]
 
-    def supports_gradual_target_updates(self):
+    def supports_soft_target_updates(self):
         """
-        Gets whether the model supports frequent, gradual updates to target values.
+        Gets whether the model supports frequent, "soft" gradual updates to target values.
 
-        :return: Whether gradual updates are supported.
+        :return: Whether soft target updates are supported.
         """
         return self.tau is not None
 
@@ -253,11 +253,12 @@ class QModel:
         # Fixed-target DQN and/or Double-DQN
         #
 
-        if not self.supports_gradual_target_updates():
-            # Just do a strict copy, as per the Mnih 2015 paper
+        if not self.supports_soft_target_updates():
+            # Just do a hard copy, as per [Mnih 2015]
             self.target_model.set_weights(self.model.get_weights())
             return
 
+        # Otherwise, use soft target updates, as per [Lillicrap 2016]
         weights_model = self.model.get_weights()
         weights_target = self.target_model.get_weights()
         new_weights = []
@@ -333,7 +334,7 @@ class QAgent:
             target_prediction[0][action] = td_error
             self.model.fit(state, target_prediction)
 
-            if self.model.supports_gradual_target_updates():
+            if self.model.supports_soft_target_updates():
                 self.model.update_target_values()
 
         self.exploration.step()
