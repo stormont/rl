@@ -64,6 +64,12 @@ class Experience:
 
         return random.sample(self.memory, self.batch_size)
 
+    def step(self):
+        """
+        Indicate that a training step is complete.
+        """
+        pass
+
 
 class PriorityExperience:
     """
@@ -130,7 +136,6 @@ class PriorityExperience:
     def step(self):
         """
         Indicate that a training step is complete to anneal `alpha` and `beta` towards one.
-        :return: None
         """
         self.memory.set_alpha(max(self.memory.alpha * self.anneal_rate, 1.))
         self.beta = max(self.beta * self.anneal_rate, 1.)
@@ -440,6 +445,7 @@ class QAgent:
             if self.model.supports_soft_target_updates():
                 self.model.update_target_values()
 
+        self.model.experience_replay.step()
         self.exploration.step()
 
 
