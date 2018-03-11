@@ -71,7 +71,7 @@ class Experience:
         pass
 
 
-class PriorityExperience:
+class PrioritizedExperience:
     """
     A behavior for storing prioritized experience replay storage and sampling.
     """
