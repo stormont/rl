@@ -78,7 +78,7 @@ class PriorityExperience:
         """
         return True
 
-    def __init__(self, max_size, batch_size, replay_start_size, initial_td_error, epsilon, alpha, beta):
+    def __init__(self, max_size, batch_size, replay_start_size, initial_td_error, epsilon, alpha, beta, anneal_rate):
         """
         Creates the behavior.
         :param max_size: The maximum storage size of the experience replay.
@@ -88,6 +88,7 @@ class PriorityExperience:
         :param epsilon: The epsilon non-zero error to add to prioritized samples.
         :param alpha: The exponent by which to weight the prioritization amount.
         :param beta: The exponent by which to weight importance sampling.
+        :param anneal_rate: The rate by which to anneal `alpha` and `beta` to 1.
         """
         self.memory = proportional.Experience(memory_size=max_size, alpha=alpha, epsilon=epsilon)
         self.batch_size = batch_size
@@ -95,6 +96,7 @@ class PriorityExperience:
         self.initial_td_error = initial_td_error
         self.epsilon = epsilon
         self.beta = beta
+        self.anneal_rate = anneal_rate
 
     def add(self, state, action, reward, next_state):
         """
@@ -124,6 +126,14 @@ class PriorityExperience:
             return []
 
         return self.memory.select(self.beta, batch_size=self.batch_size)
+
+    def step(self):
+        """
+        Indicate that a training step is complete to anneal `alpha` and `beta` towards one.
+        :return: None
+        """
+        self.memory.set_alpha(max(self.memory.alpha * self.anneal_rate, 1.))
+        self.beta = max(self.beta * self.anneal_rate, 1.)
 
     def update_priority(self, sample_index, new_priority):
         """
