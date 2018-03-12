@@ -493,8 +493,11 @@ def run(env, num_episodes, num_time_steps, replay_batch_size, scores_filename=No
     #  - minimum replay start size of 0.1%
     experience_max_size = int(num_episodes * num_time_steps * 0.02)
     replay_start_size = int(num_episodes * num_time_steps * 0.001)
-    experience_replay = Experience(max_size=experience_max_size, batch_size=replay_batch_size,
-                                   replay_start_size=replay_start_size)
+    experience_replay = Experience(
+        max_size=experience_max_size, batch_size=replay_batch_size, replay_start_size=replay_start_size)
+    # experience_replay = PrioritizedExperience(
+    #     max_size=experience_max_size, batch_size=replay_batch_size, replay_start_size=replay_start_size,
+    #     initial_td_error=10, alpha=0.4, beta=0.4, anneal_rate=0.95, epsilon=0.001)
 
     model = Model(state_size=env.state_size, action_size=env.action_size, learning_rate=0.001)
     model.build()

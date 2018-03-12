@@ -84,7 +84,9 @@ class Experience(object):
             self.priority_update([index], [0])  # To avoid duplicating
 
         self.priority_update(indices, priorities)  # Revert priorities
-        weights /= max(weights)  # Normalize for stability
+        max_w = max(weights)
+        for i in range(len(weights)):
+            weights[i] /= max_w  # Normalize for stability
         return zip(samples, weights, indices)
 
     def priority_update(self, indices, priorities):
