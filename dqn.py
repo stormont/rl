@@ -6,7 +6,7 @@ from keras.optimizers import Adam
 import gym
 import numpy as np
 import random
-import third_party.takoika.PrioritizedExperienceReplay.proportional as proportional
+from third_party.openai.baselines.baselines.deepq.replay_buffer import PrioritizedReplayBuffer
 import time
 
 
@@ -96,7 +96,7 @@ class PrioritizedExperience:
         :param beta: The exponent by which to weight importance sampling.
         :param anneal_rate: The rate by which to anneal `alpha` and `beta` to 1.
         """
-        self.memory = proportional.Experience(memory_size=max_size, alpha=alpha, epsilon=epsilon)
+        self.memory = PrioritizedReplayBuffer(size=max_size, alpha=alpha)
         self.batch_size = batch_size
         self.replay_start_size = replay_start_size
         self.initial_td_error = initial_td_error
@@ -113,8 +113,7 @@ class PrioritizedExperience:
         :param reward: The reward provided for the (state, action) pair.
         :param next_state: The next state transitioned to.
         """
-        value = (state, action, reward, next_state)
-        self.memory.add(value, self.initial_td_error)
+        self.memory.add(obs_t=state, action=action, reward=reward, obs_tp1=next_state[0], done=next_state[1])
 
     def can_sample(self):
         """
@@ -131,13 +130,22 @@ class PrioritizedExperience:
         if not self.can_sample():
             return []
 
-        return self.memory.select(self.beta, batch_size=self.batch_size)
+        states, actions, rewards, next_states, dones, importances, indices = \
+            self.memory.sample(batch_size=self.batch_size, beta=self.beta)
+        samples = []
+
+        # Map to shape: (state, action, reward, (next_state, done)), importance, index
+        for i in range(len(states)):
+            value = (states[i], actions[i], rewards[i], (next_states[i], dones[i]))
+            samples.append((value, importances[i], indices[i]))
+
+        return samples
 
     def step(self):
         """
         Indicate that a training step is complete to anneal `alpha` and `beta` towards one.
         """
-        self.memory.set_alpha(max(self.memory.alpha * self.anneal_rate, 1.))
+        self.memory.anneal_alpha(self.anneal_rate)
         self.beta = max(self.beta * self.anneal_rate, 1.)
 
     def update_priority(self, sample_index, new_priority):
@@ -146,7 +154,7 @@ class PrioritizedExperience:
         :param sample_index: The index of the sample to update.
         :param new_priority: The new priority of the sample.
         """
-        self.memory.priority_update(indices=[sample_index], priorities=[new_priority])
+        self.memory.update_priorities(idxes=[sample_index], priorities=[abs(new_priority) + self.epsilon])
 
 
 class EpsilonGreedy:
@@ -493,11 +501,11 @@ def run(env, num_episodes, num_time_steps, replay_batch_size, scores_filename=No
     #  - minimum replay start size of 0.1%
     experience_max_size = int(num_episodes * num_time_steps * 0.02)
     replay_start_size = int(num_episodes * num_time_steps * 0.001)
-    experience_replay = Experience(
-        max_size=experience_max_size, batch_size=replay_batch_size, replay_start_size=replay_start_size)
-    # experience_replay = PrioritizedExperience(
-    #     max_size=experience_max_size, batch_size=replay_batch_size, replay_start_size=replay_start_size,
-    #     initial_td_error=10, alpha=0.4, beta=0.4, anneal_rate=0.95, epsilon=0.001)
+    # experience_replay = Experience(
+    #     max_size=experience_max_size, batch_size=replay_batch_size, replay_start_size=replay_start_size)
+    experience_replay = PrioritizedExperience(
+        max_size=experience_max_size, batch_size=replay_batch_size, replay_start_size=replay_start_size,
+        initial_td_error=10, alpha=0.4, beta=0.4, anneal_rate=0.95, epsilon=0.001)
 
     model = Model(state_size=env.state_size, action_size=env.action_size, learning_rate=0.001)
     model.build()
