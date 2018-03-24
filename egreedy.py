@@ -1,4 +1,7 @@
 
+import numpy as np
+
+
 class EpsilonGreedy:
     """
     A behavior for managing exploration, using the epsilon-greedy algorithm.
