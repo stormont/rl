@@ -3,12 +3,35 @@ import numpy as np
 import random
 
 
+class BasicSoftWeightUpdater:
+    """
+    A basic, default behavior for applying soft target weight updates.
+    """
+    
+    @staticmethod
+    def update_target_weights(weights_model, weights_target, tau):
+        """
+        Updates soft target weights.
+        :param weights_model: The model weights.
+        :param weights_target: The target weights.
+        :param tau: The soft update coefficient.
+        :return: The updated target weights.
+        """
+        weights = []
+
+        for i in range(len(weights_model)):
+            weights.append(tau * weights_model[i] + (1. - tau) * weights_target[i])
+
+        return weights
+
+
 class QModel:
     """
     A model for performing Q-learning.
     """
 
-    def __init__(self, model, target_model=None, tau=None, experience_replay=None, use_double_q=False):
+    def __init__(self, model, target_model=None, tau=None, experience_replay=None, use_double_q=False,
+                 soft_weight_updater=BasicSoftWeightUpdater()):
         """
         Creates the Q-learning model.
         :param model: The model for current action and training.
@@ -17,12 +40,14 @@ class QModel:
                     supplied, a strict copy will be used, as per Mnih 2015.
         :param experience_replay: (optional) The behavior for performing experience replay.
         :param use_double_q: Whether to use Double-Q learning.
+        :param soft_weight_updater: The behavior to use for applying soft target weight updates.
         """
         self.model = model
         self.target_model = target_model
         self.tau = tau
         self.experience_replay = experience_replay
         self.use_double_q = use_double_q
+        self.soft_weight_updater = soft_weight_updater
 
     def fit(self, state, target_prediction):
         """
@@ -96,12 +121,26 @@ class QModel:
         # Otherwise, use soft target updates, as per [Lillicrap 2016]
         weights_model = self.model.get_weights()
         weights_target = self.target_model.get_weights()
-        new_weights = []
-
-        for i in range(len(weights_model)):
-            new_weights.append(self.tau * weights_model[i] + (1. - self.tau) * weights_target[i])
-
+        new_weights = self.soft_weight_updater.update_target_weights(weights_model, weights_target, self.tau)
         self.target_model.set_weights(new_weights)
+
+
+class BasicTargetPredictor:
+    """
+    A basic, default behavior for setting target predictions.
+    """
+
+    @staticmethod
+    def set_target_prediction(target_prediction, action, td_error):
+        """
+        Sets the target prediction.
+        :param target_prediction: The target prediction to set.
+        :param action: The action for the prediction.
+        :param td_error: The TD-error to apply.
+        :return: The updated target prediction.
+        """
+        target_prediction[0][action] = td_error
+        return target_prediction
 
 
 class QAgent:
@@ -109,7 +148,8 @@ class QAgent:
     An agent for exploring and taking action in an environment with a discrete action space.
     """
 
-    def __init__(self, state_size, action_size, model, exploration, discount_rate):
+    def __init__(self, state_size, action_size, model, exploration, discount_rate,
+                 target_predictor=BasicTargetPredictor()):
         """
         Creates the agent.
         :param state_size: The size of the state space.
@@ -123,6 +163,7 @@ class QAgent:
         self.model = model
         self.exploration = exploration
         self.gamma = discount_rate
+        self.target_predictor = target_predictor
 
     def act(self, state, be_greedy=False):
         """
@@ -187,8 +228,7 @@ class QAgent:
                 self.model.experience_replay.update_priority(index, td_error)
 
             td_error = importance * td_error
-            target_prediction = self.model.predict(state)
-            target_prediction[0][action] = td_error
+            target_prediction = self.target_predictor.set_target_prediction(self.model.predict(state), action, td_error)
             self.model.fit(state, target_prediction)
 
             if self.model.supports_soft_target_updates():

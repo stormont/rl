@@ -139,8 +139,6 @@ def run(env, num_episodes, num_time_steps, replay_batch_size, scores_filename=No
     target_model = ExampleModel(state_size=env.state_size, action_size=env.action_size, learning_rate=0.001)
     target_model.build()
 
-    # qmodel = QModel(model=model, experience_replay=experience_replay)
-    # qmodel = FixedTargetQModel(model=model, target_model=target_model, experience_replay=experience_replay)
     qmodel = QModel(model=model, target_model=target_model, experience_replay=experience_replay,
                     tau=0.1, use_double_q=True)
 
