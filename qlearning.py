@@ -49,17 +49,21 @@ class QModel:
         self.use_double_q = use_double_q
         self.soft_weight_updater = soft_weight_updater
 
-    def fit(self, state, target_prediction):
+    def swap_double_q(self):
         """
-        Fits a state and target prediction against the model.
-        :param state: The state to fit.
-        :param target_prediction: The target prediction.
+        Randomly swaps the target and behavior models, if Double-Q learning is being used.
         """
         if self.use_double_q and np.random.rand() < 0.5:
             swap = self.model
             self.model = self.target_model
             self.target_model = swap
 
+    def fit(self, state, target_prediction):
+        """
+        Fits a state and target prediction against the model.
+        :param state: The state to fit.
+        :param target_prediction: The target prediction.
+        """
         self.model.fit(state, target_prediction)
 
     def predict(self, state):
@@ -140,6 +144,14 @@ class BasicTargetPredictor:
         :return: The updated target prediction.
         """
         target_prediction[0][action] = td_error
+        target_sum = target_prediction.sum()
+
+        # Target predictions should sum to 1 in a softmax predictor
+        if target_sum != 0:
+            target_prediction = target_prediction / target_prediction.sum()
+        else:
+            target_prediction[0] = 1. / target_prediction.shape[1]
+
         return target_prediction
 
 
@@ -210,6 +222,7 @@ class QAgent:
             return
 
         minibatch = self.model.experience_replay.sample()
+        self.model.swap_double_q()
 
         for sample in minibatch:
             if self.model.experience_replay.supports_prioritization():
@@ -231,8 +244,8 @@ class QAgent:
             target_prediction = self.target_predictor.set_target_prediction(self.model.predict(state), action, td_error)
             self.model.fit(state, target_prediction)
 
-            if self.model.supports_soft_target_updates():
-                self.model.update_target_values()
+        if self.model.supports_soft_target_updates():
+            self.model.update_target_values()
 
         self.model.experience_replay.step()
         self.exploration.step()
